@@ -124,7 +124,7 @@ export default function Home() {
   };
 
   return (
-      <div className="flex-1 overflow-y-auto drawer-scroll px-5 sm:px-7 py-4 pb-[7.5rem] sm:pb-4">
+      <div className="min-h-screen flex flex-col overflow-y-auto drawer-scroll px-5 sm:px-7 py-4 pb-[7.5rem] sm:pb-4">
       <div id="yt-slot" className="hidden"/>
 
       {/* BG */}
@@ -187,7 +187,7 @@ export default function Home() {
       </motion.header>
 
       {/* ═══ CENTER STAGE ═══ */}
-      <div className="relative z-10 flex-1 min-h-0 flex flex-col items-center justify-center px-5 py-4 sm:py-6" style={{perspective:"1200px"}}>
+      <div className="relative z-10 flex-1 min-h-0 flex flex-col items-center justify-center px-5 py-10 sm:py-6" style={{perspective:"1200px"}}>
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div key={song.youtubeId} custom={direction} variants={slideV} initial="enter" animate="center" exit="exit"
             transition={{duration:.5,ease:[.23,1,.32,1]}} style={{transformStyle:"preserve-3d"}} className="flex flex-col items-center">
