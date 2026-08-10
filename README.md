@@ -1,4 +1,4 @@
-# 🙏 राधा कृष्ण संगीत | Radha Krishna Sangeet
+# BhaktiBhajan | Devotional Music
 
 A divine devotional music streaming website featuring bhajans and kirtans from renowned artists like **Indresh Upadhyay**, **Radhika Das**, **Krishna Das**, **Chitra Vichitra Ji**, and more.
 
@@ -60,11 +60,11 @@ DATABASE_URL=postgresql://user:pass@host:5432/db
 - **Radhika Das** - 8+ kirtans
 - **Krishna Das** - 5+ mantras
 - **Chitra Vichitra Ji** - 13+ bhajans
-- **Classic Bhajans** - 15+ songs
+- **More Bhajans** - 15+ songs
 
 ## 📄 License
 
-Made with 🙏 for Radha Krishna devotees everywhere.
+Made with 🙏 for devotees everywhere.
 
 ---
 
