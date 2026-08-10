@@ -32,6 +32,8 @@ export const songsData: SongData[] = [
   { title: "Radha Ramanam (Lyrics)", artist: "Indresh Upadhyay", youtubeId: "UFjxOjUJexU", category: "indresh-upadhyay", mood: "meditative" },
   { title: "Bhaktipath Bhajans Collection", artist: "Indresh Upadhyay", youtubeId: "GatkQIXgYTY", category: "indresh-upadhyay", mood: "devotional" },
   { title: "Jagannath Chaka Nain Lilachal Vare", artist: "Indresh Upadhyay", youtubeId: "5B2N7zYO1b8", category: "indresh-upadhyay", mood: "devotional" },
+  { title: "Ladli Shri Radha", artist: "Indresh Upadhyay", youtubeId: "CeS1rhZ8hFk", category: "indresh-upadhyay", mood: "devotional" },
+  { title: "Mhara Girdhar Lal - Bhaktimati Meera Bai ji", artist: "Indresh Upadhyay", youtubeId: "VgZQXHvTfmU", category: "indresh-upadhyay", mood: "devotional" },
 
   // ═══ RADHIKA DAS ═══
   { title: "Hare Krishna — Union Chapel London", artist: "Radhika Das", youtubeId: "9P7HcLbRp8M", category: "radhika-das", mood: "kirtan" },
