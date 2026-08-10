@@ -61,6 +61,10 @@ export default function Home() {
     return true;
   }), [songs, listCat, listQuery]);
 
+  useEffect(() => {
+    setIdx(Math.floor(Math.random() * songsData.length));
+  }, []);
+
   useEffect(() => { let id = ""; try { id = localStorage.getItem("bb-sid") || ""; } catch {/* */} if (!id) { id = `bb_${Date.now()}_${Math.random().toString(36).slice(2,10)}`; try { localStorage.setItem("bb-sid", id); } catch {/* */} } sessionId.current = id; }, []);
 
   useEffect(() => {
@@ -120,7 +124,7 @@ export default function Home() {
   };
 
   return (
-      <div className="flex-1 overflow-y-auto drawer-scroll px-5 sm:px-7 py-4">
+      <div className="flex-1 overflow-y-auto drawer-scroll px-5 sm:px-7 py-4 pb-[7.5rem] sm:pb-4">
       <div id="yt-slot" className="hidden"/>
 
       {/* BG */}
@@ -245,8 +249,8 @@ export default function Home() {
         initial={{opacity:0,y:20}}
         animate={{opacity:1,y:0}}
         transition={{delay:.4}}
-        className="relative z-20 grid grid-cols-1 sm:grid-cols-3 items-center gap-2 sm:gap-0 px-5 sm:px-8 py-4 text-center">
-          <div className="justify-self-center sm:justify-self-start">
+        className="fixed bottom-0 left-0 right-0 z-20 grid grid-cols-1 sm:grid-cols-3 items-center gap-2 sm:gap-0 px-5 sm:px-8 py-4 text-center bg-zinc-950/95 sm:bg-transparent backdrop-blur-md sm:backdrop-blur-0 sm:static sm:bottom-auto sm:left-auto sm:right-auto">
+          <div className="hidden sm:block justify-self-center sm:justify-self-start">
 
           <a
             href={`https://www.youtube.com/watch?v=${song.youtubeId}`}
@@ -263,7 +267,7 @@ export default function Home() {
           © {new Date().getFullYear()} Reserved by <span className="text-zinc-400 font-medium">Ritesh Sharma</span>
         </p>
 
-        <div className="justify-self-center sm:justify-self-end">
+        <div className="hidden sm:block justify-self-center sm:justify-self-end">
           <a
             href={lnk(song.category).spotify}
             target="_blank"
