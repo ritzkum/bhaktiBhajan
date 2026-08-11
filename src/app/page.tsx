@@ -61,10 +61,6 @@ export default function Home() {
     return true;
   }), [songs, listCat, listQuery]);
 
-  useEffect(() => {
-    setIdx(Math.floor(Math.random() * songsData.length));
-  }, []);
-
   useEffect(() => { let id = ""; try { id = localStorage.getItem("bb-sid") || ""; } catch {/* */} if (!id) { id = `bb_${Date.now()}_${Math.random().toString(36).slice(2,10)}`; try { localStorage.setItem("bb-sid", id); } catch {/* */} } sessionId.current = id; }, []);
 
   useEffect(() => {
@@ -87,11 +83,53 @@ export default function Home() {
     return () => clearInterval(iv);
   }, []);
 
+  // Register service worker
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {/* */});
     }
   }, []);
+
+  // Silent audio keepalive — prevents browser from suspending audio when tab is hidden
+  const silentAudio = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Create a tiny silent audio loop using a data URI (WAV, 1 sample of silence)
+    const silenceDataURI = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+    const audio = new Audio(silenceDataURI);
+    audio.loop = true;
+    audio.volume = 0.01;
+    silentAudio.current = audio;
+    return () => { audio.pause(); audio.src = ""; };
+  }, []);
+
+  // Start/stop silent audio with playback
+  useEffect(() => {
+    if (!silentAudio.current) return;
+    if (playing) {
+      silentAudio.current.play().catch(() => {/* */});
+    } else {
+      silentAudio.current.pause();
+    }
+  }, [playing]);
+
+  // Re-kick YT player if browser paused it on tab switch
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && playing && pl.current) {
+        try {
+          const state = pl.current.getPlayerState();
+          // If paused (2) or unstarted (-1), resume
+          if (state === 2 || state === -1) {
+            pl.current.playVideo();
+          }
+        } catch {/* */}
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [playing]);
+
   // Wake lock — keep screen/audio alive
   const wakeLock = useRef<WakeLockSentinel | null>(null);
   useEffect(() => {
@@ -108,6 +146,7 @@ export default function Home() {
     document.addEventListener("visibilitychange", onVis);
     return () => { document.removeEventListener("visibilitychange", onVis); };
   }, [playing]);
+
   // Media Session API — lock screen controls + metadata
   useEffect(() => {
     if (!("mediaSession" in navigator) || !song) return;
@@ -121,14 +160,17 @@ export default function Home() {
       ],
     });
   }, [song]);
+
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
     navigator.mediaSession.playbackState = playing ? "playing" : "paused";
   }, [playing]);
-  // Bind lock screen buttons (set once, they read latest via refs)
+
+  // Media Session action refs — filled after functions are defined below
   const goNextRef = useRef<() => void>(() => {});
   const goPrevRef = useRef<() => void>(() => {});
   const togglePlayRef = useRef<() => void>(() => {});
+
   useEffect(() => { if (typeof window === "undefined") return; if (window.YT) { setYtOk(true); return; } const s = document.createElement("script"); s.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(s); window.onYouTubeIframeAPIReady = () => setYtOk(true); }, []);
   useEffect(() => { try { const s = localStorage.getItem("bb-fav"); if (s) setFavs(new Set(JSON.parse(s))); } catch {/* */} }, []);
   useEffect(() => { try { localStorage.setItem("bb-fav", JSON.stringify([...favs])); } catch {/* */} }, [favs]);
@@ -138,7 +180,7 @@ export default function Home() {
     if (pl.current) { pl.current.destroy(); pl.current = null; }
     const el = document.getElementById("yt-slot"); if (!el) return;
     el.innerHTML = "<div id='yt-p'></div>";
-    pl.current = new window.YT.Player("yt-p", { height:"0", width:"0", videoId: song.youtubeId, playerVars:{ autoplay:1, controls:0, disablekb:1, fs:0, rel:0 }, events: {
+    pl.current = new window.YT.Player("yt-p", { height:"1", width:"1", videoId: song.youtubeId, playerVars:{ autoplay:1, controls:0, disablekb:1, fs:0, rel:0, playsinline:1 }, events: {
       onReady:(e:{target:YTP})=>{ e.target.playVideo(); setDur(e.target.getDuration()); },
       onStateChange:(e:{data:number;target:YTP})=>{ const S=window.YT.PlayerState; if(e.data===S.ENDED) goNext(); else if(e.data===S.PLAYING){setPlaying(true);setDur(e.target.getDuration());} else if(e.data===S.PAUSED) setPlaying(false); if(e.data===-1) setTimeout(()=>{try{const st=pl.current?.getPlayerState?.();if(st===-1||st===5){rm(song.youtubeId);goNext();}}catch{/* */}},6000); },
       onError:()=>{rm(song.youtubeId);goNext();},
@@ -158,10 +200,12 @@ export default function Home() {
   const fmt = (s:number) => (!s||isNaN(s)) ? "0:00" : `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,"0")}`;
   const lnk = (c:string) => artistLinks[c as keyof typeof artistLinks] || artistLinks.More;
   const isFav = favs.has(song.youtubeId);
+
   // Keep media session refs in sync
   useEffect(() => { goNextRef.current = goNext; }, [goNext]);
   useEffect(() => { goPrevRef.current = goPrev; }, [goPrev]);
   useEffect(() => { togglePlayRef.current = togglePlay; }, [togglePlay]);
+
   // Register media session handlers once
   useEffect(() => {
     if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
@@ -178,8 +222,9 @@ export default function Home() {
   };
 
   return (
-      <div className="min-h-screen flex flex-col overflow-y-auto drawer-scroll px-5 sm:px-7 py-4 pb-[7.5rem] sm:pb-4">
-      <div id="yt-slot" className="hidden"/>
+    <div className="relative h-screen w-screen flex flex-col overflow-hidden bg-[#08060e]">
+      {/* YT player — 1x1 px, off-screen but NOT display:none (browsers suspend hidden iframes) */}
+      <div id="yt-slot" style={{position:"fixed",bottom:0,right:0,width:1,height:1,opacity:0.01,pointerEvents:"none",zIndex:-1}} />
 
       {/* BG */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
@@ -241,7 +286,7 @@ export default function Home() {
       </motion.header>
 
       {/* ═══ CENTER STAGE ═══ */}
-      <div className="relative z-10 flex-1 min-h-0 flex flex-col items-center justify-center px-5 py-10 sm:py-6" style={{perspective:"1200px"}}>
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5" style={{perspective:"1200px"}}>
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div key={song.youtubeId} custom={direction} variants={slideV} initial="enter" animate="center" exit="exit"
             transition={{duration:.5,ease:[.23,1,.32,1]}} style={{transformStyle:"preserve-3d"}} className="flex flex-col items-center">
@@ -299,39 +344,16 @@ export default function Home() {
       </div>
 
       {/* ═══ FOOTER ═══ */}
-            <motion.footer
-        initial={{opacity:0,y:20}}
-        animate={{opacity:1,y:0}}
-        transition={{delay:.4}}
-        className="fixed bottom-0 left-0 right-0 z-20 grid grid-cols-1 sm:grid-cols-3 items-center gap-2 sm:gap-0 px-5 sm:px-8 py-4 text-center bg-zinc-950/95 sm:bg-transparent backdrop-blur-md sm:backdrop-blur-0 sm:static sm:bottom-auto sm:left-auto sm:right-auto">
-          <div className="hidden sm:block justify-self-center sm:justify-self-start">
-
-          <a
-            href={`https://www.youtube.com/watch?v=${song.youtubeId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[11px] text-zinc-600 hover:text-red-400 transition flex items-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-            Watch on YouTube
-          </a>
-        </div>
-
-        <p className="justify-self-center text-[10px] sm:text-[11px] text-zinc-600 text-center">
-          © {new Date().getFullYear()} Reserved by <span className="text-zinc-400 font-medium">Ritesh Sharma</span>
-        </p>
-
-        <div className="hidden sm:block justify-self-center sm:justify-self-end">
-          <a
-            href={lnk(song.category).spotify}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[11px] text-zinc-600 hover:text-[#1DB954] transition flex items-center gap-1.5"
-          >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-            Find on Spotify
-          </a>
-        </div>
+      <motion.footer initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay:.4}} className="relative z-20 flex items-center justify-between px-5 sm:px-8 py-4">
+        <a href={`https://www.youtube.com/watch?v=${song.youtubeId}`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-zinc-600 hover:text-red-400 transition flex items-center gap-1.5">
+          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          Watch on YouTube
+        </a>
+        <p className="text-[10px] text-zinc-700">{songs.length} songs · via YouTube</p>
+        <a href={lnk(song.category).spotify} target="_blank" rel="noopener noreferrer" className="text-[11px] text-zinc-600 hover:text-[#1DB954] transition flex items-center gap-1.5">
+          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+          Find on Spotify
+        </a>
       </motion.footer>
 
       {/* ═══ SONG LIST DRAWER ═══ */}
@@ -377,7 +399,7 @@ export default function Home() {
                 </div>
 
                 {/* Filter pills */}
-                <div className="flex gap-2.5 pb-1 overflow-x-auto overscroll-x-contain" style={{perspective:"600px"}}>
+                <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide" style={{perspective:"600px"}}>
                   {categories.map((c,i)=>(
                     <motion.button key={c.id}
                       initial={{opacity:0,y:10,rotateX:-15}}
