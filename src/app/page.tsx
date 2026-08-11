@@ -87,6 +87,48 @@ export default function Home() {
     return () => clearInterval(iv);
   }, []);
 
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {/* */});
+    }
+  }, []);
+  // Wake lock — keep screen/audio alive
+  const wakeLock = useRef<WakeLockSentinel | null>(null);
+  useEffect(() => {
+    const acquire = async () => {
+      if (!playing) { if (wakeLock.current) { wakeLock.current.release(); wakeLock.current = null; } return; }
+      try {
+        if ("wakeLock" in navigator && !wakeLock.current) {
+          wakeLock.current = await navigator.wakeLock.request("screen");
+        }
+      } catch {/* */}
+    };
+    acquire();
+    const onVis = () => { if (document.visibilityState === "visible" && playing) acquire(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { document.removeEventListener("visibilitychange", onVis); };
+  }, [playing]);
+  // Media Session API — lock screen controls + metadata
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !song) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.title,
+      artist: song.artist,
+      album: "bhaktiBhajan",
+      artwork: [
+        { src: `https://img.youtube.com/vi/${song.youtubeId}/mqdefault.jpg`, sizes: "320x180", type: "image/jpeg" },
+        { src: `https://img.youtube.com/vi/${song.youtubeId}/hqdefault.jpg`, sizes: "480x360", type: "image/jpeg" },
+      ],
+    });
+  }, [song]);
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.playbackState = playing ? "playing" : "paused";
+  }, [playing]);
+  // Bind lock screen buttons (set once, they read latest via refs)
+  const goNextRef = useRef<() => void>(() => {});
+  const goPrevRef = useRef<() => void>(() => {});
+  const togglePlayRef = useRef<() => void>(() => {});
   useEffect(() => { if (typeof window === "undefined") return; if (window.YT) { setYtOk(true); return; } const s = document.createElement("script"); s.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(s); window.onYouTubeIframeAPIReady = () => setYtOk(true); }, []);
   useEffect(() => { try { const s = localStorage.getItem("bb-fav"); if (s) setFavs(new Set(JSON.parse(s))); } catch {/* */} }, []);
   useEffect(() => { try { localStorage.setItem("bb-fav", JSON.stringify([...favs])); } catch {/* */} }, [favs]);
@@ -116,6 +158,18 @@ export default function Home() {
   const fmt = (s:number) => (!s||isNaN(s)) ? "0:00" : `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,"0")}`;
   const lnk = (c:string) => artistLinks[c as keyof typeof artistLinks] || artistLinks.More;
   const isFav = favs.has(song.youtubeId);
+  // Keep media session refs in sync
+  useEffect(() => { goNextRef.current = goNext; }, [goNext]);
+  useEffect(() => { goPrevRef.current = goPrev; }, [goPrev]);
+  useEffect(() => { togglePlayRef.current = togglePlay; }, [togglePlay]);
+  // Register media session handlers once
+  useEffect(() => {
+    if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
+    navigator.mediaSession.setActionHandler("play", () => togglePlayRef.current());
+    navigator.mediaSession.setActionHandler("pause", () => togglePlayRef.current());
+    navigator.mediaSession.setActionHandler("nexttrack", () => goNextRef.current());
+    navigator.mediaSession.setActionHandler("previoustrack", () => goPrevRef.current());
+  }, []);
 
   const slideV = {
     enter:(d:number)=>({x:d>0?280:-280,opacity:0,scale:.88,rotateY:d>0?20:-20}),
